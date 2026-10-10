@@ -1,0 +1,43 @@
+<svg width="1024" height="1024" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#272B3A"/>
+      <stop offset="1" stop-color="#0B0C12"/>
+    </linearGradient>
+    <linearGradient id="wisp" x1="1" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3EE6D8"/>
+      <stop offset="0.45" stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#8B5CF6"/>
+    </linearGradient>
+    <linearGradient id="tail" x1="1" y1="1" x2="0" y2="0">
+      <stop offset="0" stop-color="#38BDF8" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#38BDF8" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 背景圆角方块 -->
+  <rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- 终端窗口圆点 -->
+  <circle cx="78" cy="62" r="9" fill="#454B5E"/>
+  <circle cx="112" cy="62" r="9" fill="#454B5E"/>
+  <circle cx="146" cy="62" r="9" fill="#454B5E"/>
+
+  <!-- wisp 光带辉光（三层弱化描边，避免滤镜保证各渲染器一致） -->
+  <g fill="none" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M 380 130 C 300 210, 170 330, 108 384" stroke="url(#wisp)" stroke-width="150" stroke-opacity="0.10"/>
+    <path d="M 380 130 C 300 210, 170 330, 108 384" stroke="url(#wisp)" stroke-width="128" stroke-opacity="0.16"/>
+  </g>
+
+  <!-- wisp 光尾：从对角顶端向上外侧飘出 -->
+  <path d="M 402 96 C 428 78, 452 62, 470 44 C 458 74, 444 92, 424 106 Z" fill="url(#tail)"/>
+  <circle cx="468" cy="50" r="11" fill="#7DE9FF"/>
+  <circle cx="468" cy="50" r="20" fill="#7DE9FF" opacity="0.22"/>
+
+  <!-- Z 顶部横杠 -->
+  <path d="M 150 100 L 300 100 L 281 164 L 131 164 Z" fill="#F4F6FB"/>
+  <!-- Z 底部横杠 -->
+  <path d="M 232 348 L 437 348 L 418 412 L 213 412 Z" fill="#F4F6FB"/>
+  <!-- Z 主对角 = wisp 光带 -->
+  <path d="M 322 100 L 437 100 C 362 190, 268 318, 196 412 L 75 412 C 150 320, 255 190, 322 100 Z" fill="url(#wisp)"/>
+</svg>
