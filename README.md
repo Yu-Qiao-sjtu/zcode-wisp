@@ -10,14 +10,41 @@
 <p align="center">
   简体中文 | <a href="README.en.md">English</a>
 </p>
+<p align="center"><b>ZCode-Wisp · ZCode × WispTerm 能力融合版</b></p>
 
 
 
 ZCode 是 AI 编程工作台，提供桌面应用、浏览器界面和终端 Agent。本仓库包含客户端、后端服务、共享 UI，以及 Agent CLI 与运行时源码。
 
+本仓库（zcode-wisp）在 ZCode 之上融合了 [WispTerm](https://github.com/xuzhougeng/wispterm) 的远程开发与 AI 工作流能力，见下方[「ZCode × WispTerm 融合功能」](#zcode--wispterm-融合功能)。
+
 ## 更新
 
+- 2026-10-10：融合 WispTerm 能力——外部 Agent 历史导入、SSH 端口转发管理器、内嵌浏览器回环隧道、对话 Markdown 导出、模型切换上下文交接、远程文件下载、PubMed 工具、/distill 技能蒸馏、Memory Digest 开发日志。
 - 2026-9-23：更新至 ZCode v3.14.3 版本。
+
+## ZCode × WispTerm 融合功能
+
+在 ZCode 的桌面 / Web / TUI 三端之上，移植了 WispTerm 的一系列远程开发与 AI 工作流能力。全部为 TypeScript 重新实现，未复制 WispTerm 的任何源码；设计致谢见 [NOTICE.md](NOTICE.md) 第五节。
+
+### AI 工作流
+
+| 功能 | 说明 | 入口 |
+| ---- | ---- | ---- |
+| **外部 Agent 历史导入** | 浏览本机 Codex CLI / Claude Code / Kimi Code / OpenCode / Grok 的原生会话，导入为真实 ZCode 任务并继续对话；支持按 workspace 与时间筛选 | 设置 → 迁移 →「会话来源」 |
+| **对话 Markdown 导出** | 一键导出完整对话：clean 版只含用户输入与最终回答，full 版附带思考过程、工具调用与用量元数据 | TUI `/export [full]` |
+| **模型切换上下文交接** | 跨模型切换后自动压缩先前对话，新模型以摘要接手，避免上下文断裂或重复回放 | `switchModelConfig` 的 `compactAfterSwitch`；或环境变量 `ZCODE_MODEL_SWITCH_COMPACT=1` 全局开启 |
+| **技能蒸馏** | 把当前会话沉淀为可复用技能写入 `~/.zcode/skills/`；密钥先行脱敏，绝不覆盖已有技能 | TUI `/distill [name]`（别名 `/沉淀`） |
+| **PubMed 文献检索** | Agent 内置 NCBI PubMed 工具（esearch + efetch），直接返回标题 / 作者 / 期刊 / DOI / 摘要 | 让 Agent 调用 `PubMed` 工具 |
+| **Memory Digest 开发日志** | 每日把五家 CLI 的会话按项目汇总成结构化开发日志（密钥脱敏），可交给定时 automation 做 AI 精炼 | 任务服务 `generateMemoryDigest`，落盘 `<数据目录>/memory-digest/<date>.md` |
+
+### 远程开发
+
+| 功能 | 说明 | 入口 |
+| ---- | ---- | ---- |
+| **SSH 端口转发管理器** | 规则化管理本地（-L）与反向（-R）转发：随 Host 自启、运行状态可见、仅允许 loopback 地址、密码只在启动瞬间使用且绝不落盘 | 设置 → SSH 端口转发 |
+| **内嵌浏览器回环隧道** | 远程工作区点开 `127.0.0.1` 链接（含 Jupyter `?token=`）自动经 SSH 建隧道并重写地址；端口冲突回避、就绪探测、空闲 10 分钟自动回收 | 直接在终端 / 对话中点链接，或浏览器面板输入远端地址 |
+| **远程文件下载到本地** | 远程文件经 SFTP 通道分段读取，直达本机保存对话框，无需手动 scp | 文件树右键 →「下载到本地…」 |
 
 ## 初始化
 

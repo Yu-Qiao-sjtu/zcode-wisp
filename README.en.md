@@ -10,12 +10,39 @@
 <p align="center">
   <a href="README.md">简体中文</a> | English
 </p>
+<p align="center"><b>ZCode-Wisp · ZCode × WispTerm fusion edition</b></p>
 
 ZCode is an AI coding workspace with desktop, browser, and terminal interfaces. This repository contains the clients, backend services, shared UI, and Agent CLI and runtime source code.
 
+This repository (zcode-wisp) fuses [WispTerm](https://github.com/xuzhougeng/wispterm)'s remote-development and AI-workflow capabilities into ZCode. See [ZCode × WispTerm fusion features](#zcode--wispterm-fusion-features) below.
+
 ## Updates
 
+- 2026-10-10: Fused WispTerm capabilities — external agent session import, SSH port-forwarding manager, embedded-browser loopback tunnels, conversation Markdown export, model-switch context handoff, remote file download, PubMed tool, /distill skill distillation, and Memory Digest dev logs.
 - 2026-9-23: Updated to ZCode v3.14.3.
+
+## ZCode × WispTerm fusion features
+
+On top of ZCode's desktop / web / TUI surfaces, this repository ports a series of WispTerm's remote-development and AI-workflow capabilities. Everything is reimplemented in TypeScript with no WispTerm source copied; see [NOTICE.md](NOTICE.md) section 5 for design attribution.
+
+### AI workflow
+
+| Feature | Description | Entry point |
+| ------- | ----------- | ----------- |
+| **External agent session import** | Browse native sessions from local Codex CLI / Claude Code / Kimi Code / OpenCode / Grok and import them as real ZCode tasks you can continue; filter by workspace and time range | Settings → Migration → "Session source" |
+| **Conversation Markdown export** | Export the full conversation: clean mode keeps user prompts and final answers; full mode adds thinking, tool calls, and usage metadata | TUI `/export [full]` |
+| **Model-switch context handoff** | After switching models, prior context is compacted automatically so the new model takes over from a summary | `compactAfterSwitch` on `switchModelConfig`; or set `ZCODE_MODEL_SWITCH_COMPACT=1` to enable globally |
+| **Skill distillation** | Distill the current session into a reusable skill under `~/.zcode/skills/`; secrets are redacted first and existing skills are never overwritten | TUI `/distill [name]` |
+| **PubMed literature search** | Built-in NCBI PubMed agent tool (esearch + efetch) returning title / authors / journal / DOI / abstract | Ask the agent to use the `PubMed` tool |
+| **Memory Digest dev logs** | Daily structured dev log grouping sessions from all five CLIs by project (secret-redacted); hand the file to a scheduled automation for AI refinement | Task service `generateMemoryDigest`; written to `<data dir>/memory-digest/<date>.md` |
+
+### Remote development
+
+| Feature | Description | Entry point |
+| ------- | ----------- | ----------- |
+| **SSH port-forwarding manager** | Rule-based local (-L) and reverse (-R) forwarding: auto-start with the host, live status, loopback-only safety, passwords used only at start time and never persisted | Settings → SSH Port Forwarding |
+| **Embedded-browser loopback tunnels** | Opening a `127.0.0.1` link (including Jupyter `?token=`) in a remote workspace automatically builds an SSH tunnel and rewrites the URL; port-collision avoidance, readiness probe, and 10-minute idle reclaim | Click links in the terminal / chat, or type a remote address in the browser panel |
+| **Remote file download to local** | Remote files stream over the SFTP channel straight to the local save dialog — no manual scp | File tree right-click → "Download to local machine…" |
 
 ## Setup
 
