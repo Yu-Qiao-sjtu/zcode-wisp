@@ -122,6 +122,7 @@ import {
 import { watchCronRunBotDelivery } from "./cronBotDelivery.js";
 import { createHostRemoteWorkspaceProxyState } from "./hostRemoteWorkspaceProxyState.js";
 import { createRemoteWorkspaceServiceCollection } from "./remoteWorkspaceServiceCollection.js";
+import { createRemoteLoopbackUrlResolver } from "./remoteLoopbackTunnels.js";
 import { getRemoteProviderProvisioningExecutor } from "./remoteProviderProvisioningService.js";
 import { createRemotePromptAttachmentTransferService } from "./promptAttachmentTransferService.js";
 import { shouldReportHostConsoleError, stringifyHostLogArg } from "./hostLog.js";
@@ -157,6 +158,8 @@ type RemoteBackendHostConnection = RemoteConnection & {
 type HostRemoteConnection = RemoteBackendHostConnection;
 interface HostRemoteConnectionCapabilities {
   browserRecordingUploader?: Pick<IRemoteBackend, "upload">;
+  /** SSH 回环隧道：内嵌浏览器打开远端 127.0.0.1 URL 时按需建 ssh -L 等价转发。 */
+  remoteBackend?: Pick<IRemoteBackend, "openLoopbackForward" | "closeLoopbackForward">;
   remoteMediaPreviewFactory?: (
     scope: Extract<WindowHostAttachmentScope, { kind: "remote" }>,
   ) => RemoteMediaPreviewProxy;
@@ -1737,6 +1740,7 @@ async function createWindowRemoteConnectionHandle(params: {
       "backend" in connection
         ? {
             browserRecordingUploader: connection.backend,
+            remoteBackend: connection.backend,
             ...(remoteMediaPreviewFactory ? { remoteMediaPreviewFactory } : {}),
           }
         : {},
@@ -2863,6 +2867,19 @@ parentPort.on("message", async (e: Electron.MessageEvent) => {
                 });
               },
               onAutomationManualRunRequested: dispatchManualAutomationRun,
+              resolveRemoteLoopbackUrl: createRemoteLoopbackUrlResolver({
+                resolveBackend: (scope) =>
+                  windowRemoteConnectionRegistry.resolveScopedCapabilities({
+                    kind: "remote",
+                    remoteSessionId: scope.remoteSessionId,
+                    workspacePath: scope.workspacePath,
+                    workspaceIdentity: scope.workspaceIdentity,
+                  })?.remoteBackend,
+                resolveTargetKind: (remoteSessionId) =>
+                  windowRemoteConnectionRegistry.getSession(remoteSessionId)?.target.kind,
+                logInfo: (message, details) => logger.info(message, details),
+                logWarn: (message, details) => logger.warn(message, details),
+              }),
               onOffPeakSchedulerWakeRequested: () => {
                 parentPort?.postMessage({ type: HostResponseTypes.OffPeakSchedulerWakeRequest });
               },

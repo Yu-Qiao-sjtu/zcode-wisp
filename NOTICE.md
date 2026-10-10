@@ -68,3 +68,7 @@ AI 生成的代码、命令、解释、文件和建议可能存在错误、遗�
 ## 四、第三方许可与版权声明
 
 本仓库第一方代码依照根 [LICENSE](LICENSE) 采用 Apache-2.0；该许可不替其他权利人新增授权，也不覆盖第三方软件、复制代码、原生二进制、字体、图标、网页素材及其他资源的独立条款。具体依赖包详见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。受第三方版权、许可及再分发条件等约束，不承诺提供官方产品的全部功能及活动政策，具体以实际发布的源码和构建产物为准。
+
+## 五、衍生设计说明
+
+本仓库中以下功能的设计受 [WispTerm](https://github.com/xuzhougeng/wispterm)（MIT License, © Xu Z.-G.）同类能力的启发，全部以 TypeScript 重新实现，未复制其任何 Zig 源码：外部 Agent 会话历史导入（Codex / Kimi Code / OpenCode / Grok）、SSH 端口转发管理、内嵌浏览器 SSH 回环隧道、对话 Markdown 导出（full/clean）、模型切换上下文交接、远程文件下载到本地、PubMed 文献检索、对话蒸馏为技能（/distill）、Memory Digest 开发日志。相应实现的贡献者与本仓库许可保持一致。

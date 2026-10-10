@@ -42,6 +42,25 @@ export const BUILTIN_ZCODE_SLASH_COMMAND_HELP_ENTRIES: readonly BuiltinZCodeSlas
     },
     {
       details: [
+        "Writes the current conversation to zcode-export-<session>-<mode>.md in the working directory and prints the absolute path.",
+        "Default mode keeps user prompts and final answers only; full mode adds thinking, tool calls and metadata.",
+      ],
+      name: "export",
+      summary: "Export the current conversation to Markdown.",
+      usage: "/export [full]",
+    },
+    {
+      details: [
+        "Sends a redacted transcript through a normal agent turn that writes a SKILL.md draft into ~/.zcode/skills/<name>/; existing skill directories are never overwritten.",
+        "Secrets (API keys, bearer tokens, long hex) are redacted before the model sees the transcript.",
+        "The turn is user-visible and can be stopped like any other prompt.",
+      ],
+      name: "distill",
+      summary: "Distill the current conversation into a reusable skill.",
+      usage: "/distill [skill-name]",
+    },
+    {
+      details: [
         "Runs a normal agent turn that inspects the current workspace and creates or updates AGENTS.md.",
         "Existing AGENTS.md files should be edited rather than overwritten.",
         "This command targets the workspace root, not the user default ~/.zcode/AGENTS.md.",

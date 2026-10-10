@@ -51,6 +51,24 @@ export function parseSlashCommand(input: string): SlashCommand | null {
     };
   }
 
+  if (rawName === "export") {
+    return {
+      args,
+      name: "export",
+      rawName,
+      type: "known",
+    };
+  }
+
+  if (rawName === "distill" || rawName === "沉淀") {
+    return {
+      args,
+      name: "distill",
+      rawName,
+      type: "known",
+    };
+  }
+
   if (rawName === "dwf") {
     return {
       args,

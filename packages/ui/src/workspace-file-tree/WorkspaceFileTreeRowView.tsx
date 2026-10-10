@@ -1,6 +1,7 @@
 /* eslint-disable max-lines -- 文件树行集中维护拖拽、打开方式、Git 状态与上下文菜单交互。 */
 import type { EditorInfo, OpenInEditorRemoteTarget } from "@zcode/shared";
 import type { CSSProperties, KeyboardEvent, MouseEvent } from "react";
+import { useState } from "react";
 import { AlertCircle, ChevronRight, LoaderCircle } from "lucide-react";
 import { TID_WORKSPACE_FILE_TREE_ROW, testId } from "@zcode/shared";
 import { cn } from "@/components/lib/utils.js";
@@ -18,6 +19,7 @@ import { toast } from "@/components/ui/toast.js";
 import { ControlHintTooltip } from "@/ControlHintTooltip.js";
 import { useFileContextActions } from "@/hooks/useFileContextActions.js";
 import { usePlatform } from "@/hooks/usePlatform.js";
+import { useWorkspaceServices } from "@/hooks/useWorkspaceServices.js";
 import { FileDisplayIcon, resolveFileDisplayDescriptor } from "@/lib/fileDisplay.js";
 import { logger } from "@/logger.js";
 import { resolveWorkspaceFileManagerEditor } from "@/lib/workspaceEditorSelection.js";
@@ -95,6 +97,13 @@ export function WorkspaceFileTreeRowView({
   onKeyDown: (event: KeyboardEvent<HTMLDivElement>, row: WorkspaceFileTreeRow) => void;
 }) {
   const platform = usePlatform();
+  // 下载到本地需要按当前 workspace（含远程）解析文件服务；本地 Host 的保存对话框由 platform 提供。
+  const { fileService: downloadFileService } = useWorkspaceServices(
+    workspacePath,
+    undefined,
+    workspaceIdentity,
+  );
+  const [isDownloadingToLocal, setIsDownloadingToLocal] = useState(false);
   const { isDragging, setIsDragging } = useWorkspaceFileTreeRowDragState();
   const fileActions = useFileContextActions({
     canOpenLocalFileManager,
@@ -206,6 +215,60 @@ export function WorkspaceFileTreeRowView({
       deleted: isDeletedFile,
       kind: isDirectory ? "directory" : "file",
     });
+  };
+  // WispTerm 式"下载远程文件到本机"：workspace 文件服务（本地/SSH/WSL 统一）分段读取，
+  // 再交给本地 Host 的保存对话框。远程场景下读取走 SFTP 通道，无需用户手动 scp。
+  const DOWNLOAD_CHUNK_BYTES = 256 * 1024;
+  const DOWNLOAD_MAX_BYTES = 512 * 1024 * 1024;
+  const handleDownloadToLocal = async () => {
+    if (isDirectory || isDeletedFile || isDownloadingToLocal) {
+      return;
+    }
+    setIsDownloadingToLocal(true);
+    try {
+      const fileStat = await downloadFileService.stat({ path: row.path });
+      if (typeof fileStat.size === "number" && fileStat.size > DOWNLOAD_MAX_BYTES) {
+        toast(contextMenuLabels.openFailed);
+        return;
+      }
+      const chunks: Uint8Array[] = [];
+      let offset = 0;
+      while (offset < (fileStat.size ?? Number.POSITIVE_INFINITY)) {
+        const chunk = await downloadFileService.readFileRange({
+          path: row.path,
+          offset,
+          length: DOWNLOAD_CHUNK_BYTES,
+        });
+        if (chunk.length === 0) {
+          break;
+        }
+        chunks.push(chunk);
+        offset += chunk.length;
+      }
+      const data = new Uint8Array(offset);
+      let position = 0;
+      for (const chunk of chunks) {
+        data.set(chunk, position);
+        position += chunk.length;
+      }
+      const result = await platform.saveFile?.({
+        data: data.buffer as ArrayBuffer,
+        suggestedName: row.name,
+      });
+      if (!result || result.canceled) {
+        return;
+      }
+      if (result.success) {
+        toast(contextMenuLabels.downloadToLocal + " → " + (result.path ?? row.name));
+      } else {
+        toast(result.error ?? contextMenuLabels.openFailed);
+      }
+    } catch (error) {
+      logger.warn("[WorkspaceFileTree] 下载到本地失败", { path: row.path, error });
+      toast(error instanceof Error ? error.message : contextMenuLabels.openFailed);
+    } finally {
+      setIsDownloadingToLocal(false);
+    }
   };
   const rowElement = (
     <div
@@ -387,6 +450,12 @@ export function WorkspaceFileTreeRowView({
           <ContextMenuItem onSelect={() => void handleCopyRelativePath()}>
             {contextMenuLabels.copyRelativePath}
           </ContextMenuItem>
+          {!isRemoteWorkspaceFileTree ? null : (
+            <ContextMenuItem disabled={isDirectory || isDeletedFile} onSelect={() => void handleDownloadToLocal()}>
+              {isDownloadingToLocal ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
+              {contextMenuLabels.downloadToLocal}
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator />
           <ContextMenuItem onSelect={() => dispatchWorkspaceFileAddToChat(workspaceFilePayload)}>
             {contextMenuLabels.addToChat}

@@ -57,8 +57,13 @@ export interface ZCodeGlmAgentModelStateUpdatePayload {
     tokens: number;
   };
 }
-/** 外部历史迁移来源。当前只落 Claude Code，后续其它来源继续在这里扩展。 */
-export type ZCodeTaskMigrationSource = "claudeCode";
+/** 外部历史迁移来源。命名与 settings-sync 的 agent 标识保持一致。 */
+export type ZCodeTaskMigrationSource =
+  | "claudeCode"
+  | "codexCli"
+  | "kimiCode"
+  | "openCode"
+  | "grokCli";
 export type ZCodeTaskGoalStatus = "active" | "paused" | "budget_limited" | "complete";
 export type ZCodeTaskTargetChangedAction =
   | "set"

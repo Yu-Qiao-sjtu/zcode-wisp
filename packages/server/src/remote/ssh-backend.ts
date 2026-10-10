@@ -2,6 +2,7 @@
 import { Client as SSHClient } from "ssh2";
 import type { ConnectConfig } from "ssh2";
 import { createReadStream } from "node:fs";
+import net from "node:net";
 import { posix } from "node:path";
 import { Emitter } from "@zcode/rpc";
 import { resolveZCodeRuntimeEnv } from "@zcode/shared";
@@ -595,11 +596,135 @@ export class SSHBackend implements IRemoteBackend {
     return resolvePosixHomePath(remotePath, homeDir);
   }
 
+  private readonly loopbackForwards = new Map<
+    string,
+    { server: net.Server; localPort: number }
+  >();
+
+  private buildLoopbackForwardKey(remoteHost: string, remotePort: number): string {
+    return `${remoteHost}:${remotePort}`;
+  }
+
+  async openLoopbackForward(params: {
+    remoteHost: string;
+    remotePort: number;
+    preferredLocalPort?: number;
+  }): Promise<{ localPort: number }> {
+    this.assertNotDisposed();
+    await this.ensureConnected();
+
+    const key = this.buildLoopbackForwardKey(params.remoteHost, params.remotePort);
+    const existing = this.loopbackForwards.get(key);
+    if (existing) {
+      return { localPort: existing.localPort };
+    }
+
+    // 优选远端同号端口，冲突时向后探测；均占用则交给系统分配（端口 0）。
+    const preferred = params.preferredLocalPort ?? params.remotePort;
+    const candidates = [preferred];
+    for (let offset = 1; offset <= 32; offset += 1) {
+      candidates.push(preferred + offset);
+    }
+    candidates.push(0);
+
+    let lastError: unknown = null;
+    for (const candidatePort of candidates) {
+      try {
+        const record = await this.listenLoopbackForward(params, candidatePort);
+        this.loopbackForwards.set(key, record);
+        return { localPort: record.localPort };
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error("无法为本机隧道分配可用端口");
+  }
+
+  private listenLoopbackForward(
+    params: { remoteHost: string; remotePort: number },
+    preferredPort: number,
+  ): Promise<{ server: net.Server; localPort: number }> {
+    return new Promise((resolve, reject) => {
+      const server = net.createServer((socket) => {
+        socket.pause();
+        this.client.forwardOut(
+          socket.remoteAddress ?? "127.0.0.1",
+          socket.remotePort ?? 0,
+          params.remoteHost,
+          params.remotePort,
+          (error, channel) => {
+            if (error || !channel) {
+              socket.destroy();
+              return;
+            }
+            socket.resume();
+            socket.pipe(channel).pipe(socket);
+            socket.on("close", () => channel.end());
+            channel.on("close", () => socket.destroy());
+            const closeBoth = (): void => {
+              socket.destroy();
+              try {
+                channel.close();
+              } catch {
+                // 通道可能已经关闭。
+              }
+            };
+            socket.on("error", closeBoth);
+            channel.on("error", closeBoth);
+          },
+        );
+      });
+
+      const settle = (closeOnError: boolean): void => {
+        server.removeListener("error", handleError);
+        if (closeOnError) {
+          try {
+            server.close();
+          } catch {
+            // 未监听成功时无需关闭。
+          }
+        }
+      };
+      const handleError = (error: Error): void => {
+        settle(true);
+        reject(error);
+      };
+      server.once("error", handleError);
+      server.listen(preferredPort, "127.0.0.1", () => {
+        const address = server.address();
+        const localPort =
+          typeof address === "object" && address !== null ? address.port : preferredPort;
+        settle(false);
+        resolve({ server, localPort });
+      });
+    });
+  }
+
+  async closeLoopbackForward(params: { remoteHost: string; remotePort: number }): Promise<void> {
+    const key = this.buildLoopbackForwardKey(params.remoteHost, params.remotePort);
+    const record = this.loopbackForwards.get(key);
+    if (!record) {
+      return;
+    }
+    this.loopbackForwards.delete(key);
+    await new Promise<void>((resolve) => {
+      record.server.close(() => resolve());
+    });
+  }
+
   dispose(): void {
     if (this.disposed) {
       return;
     }
     this.disposed = true;
+    for (const record of this.loopbackForwards.values()) {
+      try {
+        record.server.close();
+      } catch {
+        // 退役阶段以断开为先，监听关闭失败不再处理。
+      }
+    }
+    this.loopbackForwards.clear();
     // 首次握手失败后，ssh2 可能在 socket end/close 之后继续发出 error。
     // dispose 后保留 onClientError 作为 no-op sink，不能按 end/close 事件时序提前移除，
     // 否则迟到事件会逃逸为 uncaughtException，让共享 Window Host 连带退出其它 workspace。

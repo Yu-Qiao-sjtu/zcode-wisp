@@ -32,6 +32,7 @@ export interface WorkspaceFileTreeContextMenuLabels {
   addToChat: string;
   copyAbsolutePath: string;
   copyRelativePath: string;
+  downloadToLocal: string;
   open: string;
   openInBrowser: string;
   openFailed: string;

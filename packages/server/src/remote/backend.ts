@@ -46,4 +46,15 @@ export interface IRemoteBackend extends IDisposable {
   exists(remotePath: string): Promise<boolean>;
   /** Read a small remote file (e.g. version string) */
   readFile(remotePath: string): Promise<string>;
+  /**
+   * SSH backend 专用：把远端 loopback 端口转发到本机端口（等价 ssh -L）。
+   * 同一 (remoteHost, remotePort) 重复调用复用已建立的转发；仅 SSH backend 实现。
+   */
+  openLoopbackForward?(params: {
+    remoteHost: string;
+    remotePort: number;
+    preferredLocalPort?: number;
+  }): Promise<{ localPort: number }>;
+  /** 关闭 openLoopbackForward 建立的指定转发；不影响其它转发。 */
+  closeLoopbackForward?(params: { remoteHost: string; remotePort: number }): Promise<void>;
 }

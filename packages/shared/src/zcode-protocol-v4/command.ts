@@ -209,6 +209,9 @@ export const commandPayloadSchemas = {
     provider: z.string(),
     model: z.string(),
     thought: z.string(),
+    // WispTerm 式"模型切换上下文交接"：跨模型切换成功后自动压缩先前对话，
+    // 让新模型以摘要接手。缺省关闭；env ZCODE_MODEL_SWITCH_COMPACT=1 时也可全局打开。
+    compactAfterSwitch: z.boolean().optional(),
   }),
   // additive（冻结面按黄金测试背书演进）：agent 协作模式切换。
   // 值域 = core CollaborationMode 的可切换子集（auto 非用户可切，不进 UI 命令面）。

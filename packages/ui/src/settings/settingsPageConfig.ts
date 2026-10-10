@@ -18,6 +18,7 @@ import {
   WandSparkles,
   Keyboard,
   FileSearch,
+  ArrowLeftRight,
 } from "lucide-react";
 import { isSettingsSectionEnabled, type SettingsSectionId } from "@/lib/settingsNavigation.js";
 import type { Theme } from "@/useTheme.js";
@@ -126,6 +127,13 @@ const BASE_SETTINGS_SECTIONS: SettingsSectionDefinition[] = [
     id: "browser",
     icon: Globe2,
     titleId: "settings.browser.title",
+    groupId: "basics",
+  },
+  // SSH 端口转发与浏览器同属"连接远端资源"的基础能力，紧随浏览器之后。
+  {
+    id: "portForward",
+    icon: ArrowLeftRight,
+    titleId: "settings.portForward.title",
     groupId: "basics",
   },
   // 电脑控制紧跟「浏览器」：两者都是给 Agent 用的本机操控入口，

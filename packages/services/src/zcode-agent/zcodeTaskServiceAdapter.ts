@@ -58,6 +58,8 @@ import {
   type ZCodeGoalVerificationTimelineMeta,
   type ZCodeImportSessionsResult,
   type ZCodeImportableSessionCandidate,
+  type RemoteLoopbackUrlResolveRequest,
+  type RemoteLoopbackUrlResolveResult,
   type ZCodeUsage,
   type ZCodePersistedMessage,
   type ZCodePersistedMessagePart,
@@ -150,6 +152,14 @@ import {
 import { claudeNativeSessionImportRepo } from "#src/session/claude-native/claudeNativeSessionImportRepo.js";
 import { importClaudeNativeSessions } from "#src/session/claude-native/claudeNativeSessionImportService.js";
 import { buildImportedClaudeTaskId } from "#src/session/claude-native/buildImportedClaudeTaskFile.js";
+import { externalSessionImportRepo } from "#src/session/external-native/externalSessionImportRepo.js";
+import { importExternalSessions } from "#src/session/external-native/externalSessionImportService.js";
+import { buildImportedExternalTaskId } from "#src/session/external-native/buildImportedExternalTaskFile.js";
+import { portForwardService } from "#src/portforward/portForwardService.js";
+import {
+  generateMemoryDigest,
+  readMemoryDigest,
+} from "#src/memory-digest/memoryDigestService.js";
 import {
   readLegacyImportedClaudeHistory,
   repairImportedClaudeSessionSnapshot,
@@ -183,6 +193,10 @@ interface CreateZCodeTaskServiceAdapterOptions {
   taskIndexSyncer: ZCodeTaskIndexSyncer;
   settingService?: Pick<ISettingService, "get">;
   cuaProductMcpServerResolver?: CuaProductMcpServerResolver;
+  /** 仅本地 Host 注入：远端 loopback URL → 本机隧道 URL；未注入时原样返回。 */
+  resolveRemoteLoopbackUrl?: (
+    params: RemoteLoopbackUrlResolveRequest,
+  ) => Promise<RemoteLoopbackUrlResolveResult>;
 }
 
 interface TaskTarget {
@@ -2702,6 +2716,101 @@ export function createZCodeTaskServiceAdapter(
           );
         },
       });
+    },
+
+    async scanImportableExternalSessions(params): Promise<ZCodeImportableSessionCandidate[]> {
+      void params.workspaceIdentity;
+      return externalSessionImportRepo.scanImportableSessions({
+        provider: params.provider,
+        workspacePath: params.workspacePath,
+        modifiedSince: params.modifiedSince,
+        limit: params.limit,
+      });
+    },
+
+    async importExternalSessions(params): Promise<ZCodeImportSessionsResult> {
+      const targetWorkspaceIdentity = params.workspacePath ? params.workspaceIdentity : undefined;
+      return importExternalSessions({
+        taskIndexRepo,
+        provider: params.provider,
+        workspacePath: params.workspacePath,
+        workspaceIdentity: params.workspaceIdentity,
+        sessionIds: params.sessionIds,
+        createImportedSession: async (source) => {
+          const snapshot = await options.zcodeAgentService.createSession({
+            workspacePath: source.workspacePath,
+            workspaceIdentity: targetWorkspaceIdentity,
+            sessionId: buildImportedExternalTaskId(
+              source.provider,
+              source.workspacePath,
+              source.sessionId,
+            ),
+            sessionTraceId: createSessionTraceId(),
+            persistence: "immediate",
+            importedHistory: {
+              source: source.migrationSource,
+              title: source.title,
+              createdAt: source.createdAt,
+              updatedAt: source.updatedAt,
+              messages: source.messages.map((message) => ({
+                role: message.role,
+                content: message.content,
+                timestamp: message.timestamp,
+              })),
+            },
+          });
+          const meta = await syncTaskIndexSnapshot(snapshot);
+          return syncTaskIndexMeta({ ...meta, migrationSource: source.migrationSource });
+        },
+        onTaskImported: (meta) => {
+          rememberIndexedTaskMeta(meta);
+          emitWorkspaceTaskListChanged(
+            {
+              workspacePath: meta.workspacePath,
+              workspaceIdentity: meta.workspaceIdentity,
+              taskId: meta.taskId,
+            },
+            meta,
+            "task_meta_changed",
+          );
+        },
+      });
+    },
+
+    async listPortForwardRules() {
+      return portForwardService.listRules();
+    },
+
+    async savePortForwardRule(rule) {
+      return portForwardService.saveRule(rule);
+    },
+
+    async deletePortForwardRule(params) {
+      await portForwardService.deleteRule(params.ruleId);
+    },
+
+    async setPortForwardRuleEnabled(params) {
+      return portForwardService.setRuleEnabled(params.ruleId, params.enabled, params.credential);
+    },
+
+    async getPortForwardStatuses() {
+      return portForwardService.getStatuses();
+    },
+
+    async resolveRemoteLoopbackUrl(params) {
+      const resolver = options.resolveRemoteLoopbackUrl;
+      if (!resolver) {
+        return { url: params.url, tunneled: false };
+      }
+      return resolver(params);
+    },
+
+    async generateMemoryDigest(params) {
+      return generateMemoryDigest({ date: params.date });
+    },
+
+    async readMemoryDigest(params) {
+      return readMemoryDigest(params.date);
     },
 
     async setMode(params): Promise<void> {

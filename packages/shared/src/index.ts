@@ -305,4 +305,7 @@ export * from "./pluginStoreOrder.js";
 export * from "./clientConfig.js";
 export * from "./pluginStoreOrdering.js";
 export * from "./session-debug.js";
+export * from "./portforward.js";
+export * from "./conversation-markdown.js";
+export { redactSecrets } from "./redact-secrets.js";
 export { redactFeedbackText } from "./feedbackPrivacy.js";

@@ -13,6 +13,7 @@ export * from "./bash.js";
 export * from "./node-repl.js";
 export * from "./glob.js";
 export * from "./grep.js";
+export * from "./pubmed.js";
 export * from "./webfetch.js";
 export * from "./agent.js";
 export * from "./skill.js";

@@ -252,6 +252,7 @@ export function WorkspaceFileTree({
       copyRelativePath: intl.formatMessage({
         id: "fileActions.copyRelativePath",
       }),
+      downloadToLocal: intl.formatMessage({ id: "workspaceFileTree.downloadToLocal" }),
       open: intl.formatMessage({ id: "common.open" }),
       openInBrowser: intl.formatMessage({
         id: "workspaceFileTree.openInBrowser",

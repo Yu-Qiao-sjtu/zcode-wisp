@@ -732,14 +732,43 @@ export const zcodeSessionImportMessageSchema = z
   .strict();
 export type ZCodeSessionImportMessage = z.infer<typeof zcodeSessionImportMessageSchema>;
 
+/** 外部 CLI（非 sharedContext）导入历史的公共形状；消息结构在各来源间一致。 */
+const zcodeExternalCliImportHistoryShape = {
+  title: z.string().optional(),
+  createdAt: timestampMsSchema.optional(),
+  updatedAt: timestampMsSchema.optional(),
+  messages: z.array(zcodeSessionImportMessageSchema).min(1),
+};
+
 export const zcodeSessionImportHistorySchema = z.discriminatedUnion("source", [
   z
     .object({
       source: z.literal("claudeCode"),
-      title: z.string().optional(),
-      createdAt: timestampMsSchema.optional(),
-      updatedAt: timestampMsSchema.optional(),
-      messages: z.array(zcodeSessionImportMessageSchema).min(1),
+      ...zcodeExternalCliImportHistoryShape,
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("codexCli"),
+      ...zcodeExternalCliImportHistoryShape,
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("kimiCode"),
+      ...zcodeExternalCliImportHistoryShape,
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("openCode"),
+      ...zcodeExternalCliImportHistoryShape,
+    })
+    .strict(),
+  z
+    .object({
+      source: z.literal("grokCli"),
+      ...zcodeExternalCliImportHistoryShape,
     })
     .strict(),
   z

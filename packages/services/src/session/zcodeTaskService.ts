@@ -6,6 +6,13 @@ import { createServiceDescriptor } from "#src/descriptors.js";
 import type {
   ZCodeImportSessionsResult,
   ZCodeImportableSessionCandidate,
+  ZCodeExternalImportSourceProvider,
+  PortForwardCredential,
+  PortForwardRule,
+  PortForwardRuleUpsert,
+  PortForwardRuntimeStatus,
+  RemoteLoopbackUrlResolveRequest,
+  RemoteLoopbackUrlResolveResult,
   ZCodeSessionCompactResult,
   ZCodeSessionGoalAction,
   ZCodeSessionGoalResult,
@@ -554,6 +561,61 @@ export interface IZCodeTaskService {
     workspaceIdentity?: string;
     sessionIds: string[];
   }): Promise<ZCodeImportSessionsResult>;
+
+  /** 扫描外部 CLI（Codex/Kimi/OpenCode/Grok）原生 session；扫描发生在服务运行所在机器。 */
+  scanImportableExternalSessions(params: {
+    provider: ZCodeExternalImportSourceProvider;
+    workspacePath?: string;
+    workspaceIdentity?: string;
+    modifiedSince?: number;
+    limit?: number;
+  }): Promise<ZCodeImportableSessionCandidate[]>;
+
+  /** 导入选中的外部 CLI 原生 session 为真实 ZCode task；不传 workspacePath 时按原始 workspace 导入。 */
+  importExternalSessions(params: {
+    provider: ZCodeExternalImportSourceProvider;
+    workspacePath?: string;
+    workspaceIdentity?: string;
+    sessionIds: string[];
+  }): Promise<ZCodeImportSessionsResult>;
+
+  /** 端口转发：列出全部规则；规则全局生效，不区分 workspace。 */
+  listPortForwardRules(): Promise<PortForwardRule[]>;
+
+  /** 端口转发：新建或更新规则；带 ruleId 为更新，enabled 时会立即（重启）转发。 */
+  savePortForwardRule(rule: PortForwardRuleUpsert): Promise<PortForwardRule>;
+
+  /** 端口转发：删除规则并停止对应转发进程。 */
+  deletePortForwardRule(params: { ruleId: string }): Promise<void>;
+
+  /** 端口转发：启停规则；credential 只在本次启动内存生效，绝不落盘。 */
+  setPortForwardRuleEnabled(params: {
+    ruleId: string;
+    enabled: boolean;
+    credential?: PortForwardCredential;
+  }): Promise<PortForwardRuntimeStatus | undefined>;
+
+  /** 端口转发：读取全部规则的实时运行状态。 */
+  getPortForwardStatuses(): Promise<PortForwardRuntimeStatus[]>;
+
+  /**
+   * 把远端 loopback URL 重写为经 SSH 隧道的本机 URL（含按需建隧道）。
+   * 只在本地 Host 上有实现；远端/无注入环境原样返回，tunneled=false。
+   */
+  resolveRemoteLoopbackUrl(
+    params: RemoteLoopbackUrlResolveRequest,
+  ): Promise<RemoteLoopbackUrlResolveResult>;
+
+  /** Memory Digest：扫描本机各 CLI 原生历史，生成按项目分组的指定日期（缺省当天）开发日志并落盘。 */
+  generateMemoryDigest(params: { date?: string }): Promise<{
+    date: string;
+    outputPath: string;
+    entryCount: number;
+    markdown: string;
+  }>;
+
+  /** Memory Digest：读取已生成的某日日志正文；不存在返回 null。 */
+  readMemoryDigest(params: { date: string }): Promise<string | null>;
 
   /** 切换 task 模式 */
   setMode(params: { taskId: string; mode: ZCodeTaskMode }): Promise<void>;

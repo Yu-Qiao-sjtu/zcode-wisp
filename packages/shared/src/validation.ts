@@ -548,7 +548,13 @@ export const hostLogResponseSchema = z.object({
 
 export { zcodeProviderSchema };
 
-export const zcodeTaskMigrationSourceSchema = z.enum(["claudeCode"]);
+export const zcodeTaskMigrationSourceSchema = z.enum([
+  "claudeCode",
+  "codexCli",
+  "kimiCode",
+  "openCode",
+  "grokCli",
+]);
 
 export const hostAgentProcessSpawnedResponseSchema = z.object({
   type: z.literal("agent-process-spawned"),

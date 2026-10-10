@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createUuid } from "@zcode/shared";
 import type { EmbeddedBrowserOpenUrlRequest, IPlatformService } from "@zcode/shared";
+import { useZCodeTaskService } from "@/hooks/useZCodeTaskService.js";
 import type { CodeViewerSource } from "@/lib/codeViewer.js";
 // 保活：side pane terminal 跨 workspace 会话上移到模块级 registry。
 // 关闭 terminal tab 时必须显式 release，杀掉 PTY，避免常驻 registry 造成孤儿进程。
@@ -378,14 +379,17 @@ export function useAppPanels(options: {
     [commitOpenedSidePaneState, revealSidePaneForCurrentOwner, workspaceAbsPath],
   );
 
-  const handleOpenBrowserUrl = useCallback(
-    (request: string | EmbeddedBrowserOpenUrlRequest) => {
-      const payload: EmbeddedBrowserOpenUrlRequest =
-        typeof request === "string" ? { url: request, disposition: "foreground-tab" } : request;
-      const sourceWorkspaceKey = payload.workspaceKey ?? activeWorkspaceKeyRef.current;
-      const sourceSessionId = payload.sessionId ?? sidePaneOwnerIdRef.current;
-      const sourceRemoteSessionId =
-        payload.remoteSessionId ?? workspaceRemoteSessionId ?? undefined;
+  // 远端 loopback URL 解析走"本地 Host"的任务服务（不能带 workspace 参数，
+  // 否则 RPC 会落到远端 workspace 服务，而隧道必须建在本机）。
+  const localZcodeTaskService = useZCodeTaskService();
+
+  const dispatchBrowserUrl = useCallback(
+    (
+      payload: EmbeddedBrowserOpenUrlRequest,
+      sourceWorkspaceKey: string,
+      sourceSessionId: string | null,
+      sourceRemoteSessionId: string | undefined,
+    ) => {
       const isCurrentOwner =
         sourceWorkspaceKey === activeWorkspaceKeyRef.current &&
         (sourceRemoteSessionId ?? "") === (workspaceRemoteSessionId ?? "") &&
@@ -441,7 +445,52 @@ export function useAppPanels(options: {
       commitOpenedSidePaneState,
       revealSidePaneForCurrentOwner,
       supportsEmbeddedBrowser,
+      workspaceRemoteSessionId,
+    ],
+  );
+
+  const handleOpenBrowserUrl = useCallback(
+    (request: string | EmbeddedBrowserOpenUrlRequest) => {
+      const payload: EmbeddedBrowserOpenUrlRequest =
+        typeof request === "string" ? { url: request, disposition: "foreground-tab" } : request;
+      const sourceWorkspaceKey = payload.workspaceKey ?? activeWorkspaceKeyRef.current;
+      const sourceSessionId = payload.sessionId ?? sidePaneOwnerIdRef.current;
+      const sourceRemoteSessionId =
+        payload.remoteSessionId ?? workspaceRemoteSessionId ?? undefined;
+      // 远端 workspace 里点开的 127.0.0.1 URL（含 Jupyter ?token= 链接）先经本地 Host
+      // 解析：需要时按需建 SSH 回环隧道并重写为本机地址；解析失败回退原始 URL。
+      const shouldResolveLoopback =
+        Boolean(sourceRemoteSessionId) && /^https?:\/\//iu.test(payload.url);
+      if (!shouldResolveLoopback) {
+        dispatchBrowserUrl(payload, sourceWorkspaceKey, sourceSessionId, sourceRemoteSessionId);
+        return;
+      }
+      void (async () => {
+        try {
+          const resolved = await localZcodeTaskService.resolveRemoteLoopbackUrl({
+            workspaceKey: sourceWorkspaceKey,
+            ...(sourceRemoteSessionId ? { remoteSessionId: sourceRemoteSessionId } : {}),
+            ...(workspaceAbsPath ? { workspacePath: workspaceAbsPath } : {}),
+            ...(workspaceIdentity ? { workspaceIdentity } : {}),
+            url: payload.url,
+          });
+          dispatchBrowserUrl(
+            { ...payload, url: resolved.url },
+            sourceWorkspaceKey,
+            sourceSessionId,
+            sourceRemoteSessionId,
+          );
+        } catch (error) {
+          logger.warn("[App] 解析远端回环 URL 失败，按原始 URL 打开", error);
+          dispatchBrowserUrl(payload, sourceWorkspaceKey, sourceSessionId, sourceRemoteSessionId);
+        }
+      })();
+    },
+    [
+      dispatchBrowserUrl,
+      localZcodeTaskService,
       workspaceAbsPath,
+      workspaceIdentity,
       workspaceRemoteSessionId,
     ],
   );

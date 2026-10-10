@@ -11,11 +11,67 @@ import type {
 } from "@zcode/shared/zcode-protocol-v4";
 import { V4CommandNoopError } from "../../v4-gateway.js";
 import { runSessionModelConfigMutation } from "../../model-config-mutation.js";
+import type { SteerTurnOptions } from "../../../app/types.js";
 import { requireRecord } from "../record-access.js";
 import type { V4CommandCoreHost, V4SessionRecordView } from "../types.js";
+import { startManualCompact } from "./goal-compact.js";
 
 /** 同值切换的 noop reasonCode。 */
 const CONFIG_UNCHANGED = "config.unchanged";
+
+/** 全局开关：ZCODE_MODEL_SWITCH_COMPACT=1/true 时所有跨模型切换都带摘要交接。 */
+function isModelSwitchCompactGloballyEnabled(): boolean {
+  const value = process.env["ZCODE_MODEL_SWITCH_COMPACT"]?.trim().toLowerCase();
+  return value === "1" || value === "true";
+}
+
+/**
+ * WispTerm 式"模型切换上下文交接"：跨模型切换成功后自动压缩先前对话，
+ * 新模型以摘要接手（压缩摘要由既有 /compact 管线生成，含 checkpoint 语义）。
+ * 仅在会话空闲时立即执行；有活跃 turn 时入队为 compact barrier，与手动 /compact 同路。
+ * 失败不连坐切换本身（切换已成功），只降级日志。
+ */
+function scheduleCompactionAfterModelSwitch(
+  host: V4CommandCoreHost,
+  record: V4SessionRecordView,
+  envelope: CommandEnvelope,
+): void {
+  const inputId = `${envelope.commandId}-model-switch-compact`;
+  try {
+    const routingMode = host.getInputRoutingMode?.(record.app.sessionId) ?? null;
+    const busy = Boolean(record.activeAbortController) || Boolean(record.app.runtime.getActiveTurnInfo());
+    if (!busy && routingMode !== "enqueue" && routingMode !== "guide" && routingMode !== "choice") {
+      void startManualCompact(host, record, inputId);
+      return;
+    }
+      void record.app
+        .steerTurn("/compact", {
+          commandKind: "compact",
+          inputId,
+          queryId: inputId as SteerTurnOptions["queryId"],
+          delivery: "queue",
+        })
+      .then((queued) => {
+        if (queued.kind === "rejected") {
+          host.logger?.warn?.("model-switch compact queue rejected", {
+            reason: queued.reason,
+            sessionId: record.app.sessionId,
+          });
+        }
+      })
+      .catch((error: unknown) => {
+        host.logger?.warn?.("model-switch compact enqueue failed", {
+          error: error instanceof Error ? error.message : String(error),
+          sessionId: record.app.sessionId,
+        });
+      });
+  } catch (error) {
+    host.logger?.warn?.("model-switch compact scheduling failed", {
+      error: error instanceof Error ? error.message : String(error),
+      sessionId: record.app.sessionId,
+    });
+  }
+}
 
 /**
  * 目标 Provider 不在当前 Environment Registry。Gateway 将其映射为 failed ACK；
@@ -79,7 +135,8 @@ async function switchModelConfig(
 ): Promise<CommandResult | undefined> {
   const payload = envelope.payload as CommandPayloadMap["switchModelConfig"];
   const record = requireRecord(host, envelope.sessionId);
-  return runSessionModelConfigMutation(record.app, async () => {
+  let shouldCompactAfterSwitch = false;
+  await runSessionModelConfigMutation(record.app, async () => {
     // previous 必须在串行化临界区内、setModel 之前快照。registry fallback 可能排在本命令
     // 前面，若在排队前读取会拿到过期 previous，并让 noop/事件顺序与 runtime 真值分裂。
     const previousSelection = record.app.runtime.getSessionModelSelection();
@@ -137,8 +194,16 @@ async function switchModelConfig(
       // trace 链路结构透传自 record（会话根 trace），不在命令层另起无关联 traceId。
       traceContext: record.traceContext,
     });
+    // 切换成功才排上下文交接；排程在 mutation 临界区外执行，避免与 prompt admission 竞争锁。
+    shouldCompactAfterSwitch =
+      modelIdentityChanged &&
+      (payload.compactAfterSwitch === true || isModelSwitchCompactGloballyEnabled());
     return undefined;
   });
+  if (shouldCompactAfterSwitch) {
+    scheduleCompactionAfterModelSwitch(host, record, envelope);
+  }
+  return undefined;
 }
 
 /**

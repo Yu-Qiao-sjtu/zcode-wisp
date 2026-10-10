@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Loader2, RefreshCcw, TriangleAlert } from "lucide-react";
+import type { ZCodeExternalImportSourceProvider } from "@zcode/shared";
 import { Button } from "@/components/ui/button.js";
 import {
   Card,
@@ -24,6 +25,7 @@ import { MigrationCandidatesCard } from "@/settings/MigrationCandidatesCard.js";
 
 const RANGE_OPTIONS = ["7d", "30d", "90d", "all"] as const;
 const WORKSPACE_FILTER_OPTIONS = ["all", "current"] as const;
+const SOURCE_OPTIONS = ["claude", "codex", "kimi", "opencode", "grok"] as const;
 
 export function MigrationSection({
   workspacePath,
@@ -35,6 +37,9 @@ export function MigrationSection({
   isDesktop?: boolean;
 }) {
   const { intl, locale } = useZCodeIntl();
+  const [sourceProvider, setSourceProvider] = useState<
+    "claude" | ZCodeExternalImportSourceProvider
+  >("claude");
   const {
     supportState,
     workspaceFilterMode,
@@ -62,6 +67,7 @@ export function MigrationSection({
     workspacePath,
     workspaceIdentity,
     isDesktop,
+    ...(sourceProvider !== "claude" ? { provider: sourceProvider } : {}),
   });
 
   const dateTimeFormatter = useMemo(
@@ -118,7 +124,31 @@ export function MigrationSection({
             </Alert>
           ) : null}
 
-          <div className="grid gap-4 xl:grid-cols-3">
+          <div className="grid gap-4 xl:grid-cols-4">
+            <div className="space-y-2">
+              <div className="text-ui-base font-medium text-foreground">
+                {intl.formatMessage({ id: "settings.migration.sourceLabel" })}
+              </div>
+              <Select
+                value={sourceProvider}
+                disabled={!supportState.supported || isScanning || isImporting}
+                onValueChange={(value) =>
+                  setSourceProvider(value as "claude" | ZCodeExternalImportSourceProvider)
+                }
+              >
+                <SelectTrigger size="lg" className="w-full justify-between">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SOURCE_OPTIONS.map((option) => (
+                    <SelectItem key={option} value={option}>
+                      {intl.formatMessage({ id: `settings.migration.source.${option}` })}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="space-y-2">
               <div className="text-ui-base font-medium text-foreground">
                 {intl.formatMessage({ id: "settings.migration.workspaceFilterLabel" })}

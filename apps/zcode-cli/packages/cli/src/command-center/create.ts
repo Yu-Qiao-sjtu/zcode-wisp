@@ -7,6 +7,8 @@ import { formatNewSessionResult, formatResumeResult } from "./formatters.js";
 import { handleCustomCommand } from "./handlers/custom.js";
 import { handleDwfCommand } from "./handlers/dwf.js";
 import { handleEffortCommand } from "./handlers/effort.js";
+import { handleExportCommand } from "./handlers/export.js";
+import { handleDistillCommand } from "./handlers/distill.js";
 import { handleExpertCommand } from "./handlers/expert.js";
 import { handleLocaleCommand } from "./handlers/locale.js";
 import { handleMcpCommand } from "./handlers/mcp.js";
@@ -228,6 +230,14 @@ export function createCommandCenter(deps: CommandCenterDeps): TuiSubmitPrompt {
 
       if (command.name === "effort") {
         return handleEffortCommand(command.args, deps);
+      }
+
+      if (command.name === "export") {
+        return handleExportCommand(command.args, deps);
+      }
+
+      if (command.name === "distill") {
+        return handleDistillCommand(command.args, deps);
       }
 
       if (command.name === "dwf") {

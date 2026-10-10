@@ -353,6 +353,7 @@ import { TaskIndexRepo } from "./session/taskIndexRepo.js";
 import { createBotsService } from "./bots/botsService.js";
 import { createBotRemoteWorkspaceService } from "./bots/botRemoteWorkspaceBridge.js";
 import type { SessionMessageSendRequested } from "#src/session/sessionMailbox.js";
+import { portForwardService } from "#src/portforward/portForwardService.js";
 import { createFileWatcherService } from "./fileWatcher/fileWatcherService.js";
 import { createOAuthService } from "./oauth/oauthService.js";
 import { isCurrentOAuthCredentialRequest } from "#src/oauth/oauthUnauthorizedRequest.js";
@@ -450,6 +451,10 @@ import {
   createOfficialMcpAuthHeadersResolver,
   resolveOfficialMcpCredentials,
 } from "./official-mcp/officialMcpCredentials.js";
+import type {
+  RemoteLoopbackUrlResolveRequest,
+  RemoteLoopbackUrlResolveResult,
+} from "@zcode/shared";
 import {
   createOfficialMcpTrustedOriginRegistry,
   OFFICIAL_MCP_DEV_TRUSTED_ORIGINS_ENV,
@@ -1337,6 +1342,8 @@ export function createLocalServices(options: {
     getDeviceMid?: () => string | undefined;
     runtimeSurface?: "desktop_local_host" | "remote_workspace_host";
   };
+  /** 仅本地 Host 注入：把远端 loopback URL 重写为经 SSH 隧道的本机 URL；缺省原样返回。 */
+  resolveRemoteLoopbackUrl?: (params: RemoteLoopbackUrlResolveRequest) => Promise<RemoteLoopbackUrlResolveResult>;
   /** browser-use 执行桥（host→main WebContentsView+CDP）；desktop host 注入，缺省则 browser 不可用。 */
   browserControlExecutor?: {
     list(input: {
@@ -2334,6 +2341,7 @@ export function createLocalServices(options: {
     taskIndexSyncer: zcodeTaskIndexSyncer,
     settingService,
     cuaProductMcpServerResolver,
+    resolveRemoteLoopbackUrl: options?.resolveRemoteLoopbackUrl,
   });
   const botRemoteWorkspaceService = createBotRemoteWorkspaceService({
     parentPort: options?.parentPort,
@@ -2653,6 +2661,11 @@ export function createLocalServices(options: {
   // 见 sharedSqliteRepos 声明处注释：登记全部 tasks-index sqlite 句柄，dispose 链统一关闭
   sqliteReposToClose.push(taskIndexRepo);
   sharedSqliteRepos.set(services, sqliteReposToClose);
+
+  // 端口转发规则与 workspace 无关，随 Host 装配拉起一次 autostart；
+  // 失败只进规则 error 状态，不影响 Host 其余服务。
+  void portForwardService.autoStartRules();
+
   return services;
 }
 
